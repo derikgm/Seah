@@ -119,7 +119,7 @@ CREATE TABLE recurring_rules (
 - **Layout de tarjetas** con sombras suaves y padding generoso.
 - **Jerarquía tipográfica fuerte**: títulos grandes, datos numéricos en bold.
 - **Iconos en cada acción y categoría** para reconocimiento rápido.
-- **Modo claro/oscuro** automático según sistema.
+- **Modo claro/oscuro** con selector explícito (Claro / Oscuro / Sistema) — «Sistema» sigue la preferencia del dispositivo por defecto. La elección se guarda en la tabla `settings` de SQLite y se aplica con la clase `.dark` en `<html>`.
 - **Responsive real**: sidebar lateral en desktop, bottom nav en Android.
 
 ### Paleta
@@ -279,6 +279,7 @@ Debe ser ultra-rápida. Campos en orden:
 - [x] Vista **Anual**: selector año, gráfico de líneas por mes, totales, comparativa
 - [x] Exportar transacciones a CSV
 - [x] Modo oscuro completo
+- [x] Selector de tema Claro / Oscuro / Sistema en Ajustes (+ botón rápido sol/luna en el header), persistido en SQLite
 - [x] Empty states en todas las listas
 - [x] Validaciones (montos > 0, campos requeridos, manejo de errores)
 

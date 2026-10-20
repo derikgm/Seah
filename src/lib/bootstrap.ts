@@ -1,6 +1,7 @@
 import { initDb } from "./db";
 import { seedIfEmpty } from "./seed";
 import { generateRecurring } from "./recurring";
+import { useThemeStore } from "../stores/themeStore";
 
 export interface BootstrapResult {
   generatedRecurring: number;
@@ -30,4 +31,10 @@ export function bootstrap(): Promise<BootstrapResult> {
     });
   }
   return bootstrapPromise;
+}
+
+// The saved theme lives in SQLite, so it can only be read after `initDb`.
+export async function hydrateThemePreference(): Promise<void> {
+  await bootstrap();
+  await useThemeStore.getState().hydrateTheme();
 }

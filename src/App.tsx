@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import { bootstrap } from "./lib/bootstrap";
+import { bootstrap, hydrateThemePreference } from "./lib/bootstrap";
 import AppLayout from "./components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
@@ -20,6 +20,7 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     bootstrap()
+      .then(() => hydrateThemePreference())
       .then(() => {
         if (!cancelled) setInit({ status: "ready" });
       })

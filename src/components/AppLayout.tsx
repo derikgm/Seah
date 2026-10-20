@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { NAV_ITEMS } from "./navItems";
+import ThemeToggle from "./ThemeToggle";
 
 // Sidebar for desktop (≥1024px) + bottom navigation for mobile, with a simple
 // page header. Content is rendered via the router <Outlet />.
@@ -42,6 +43,7 @@ export default function AppLayout() {
           <span className="hidden text-base font-semibold lg:block">
             Finanzas personales
           </span>
+          <ThemeToggle />
         </header>
 
         <main className="flex-1 px-4 pb-24 pt-4 sm:px-6 lg:pb-8">
