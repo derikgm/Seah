@@ -248,45 +248,51 @@ Debe ser ultra-rápida. Campos en orden:
 
 ## 6. LISTA DE TAREAS POR FASES
 
-### FASE 0 — Setup
-- [ ] Inicializar Tauri v2 + React + TS + Vite
-- [ ] Configurar Tailwind con la paleta definida
-- [ ] Instalar: `react-router-dom`, `zustand`, `lucide-react`, `recharts`, `tauri-plugin-sql`
-- [ ] Crear estructura de carpetas (`components`, `pages`, `hooks`, `stores`, `lib`, `types`, `styles`)
-- [ ] Configurar SQLite con `tauri-plugin-sql` + migraciones iniciales (schema de la sección 3)
+### FASE 0 — Setup ✅
+- [x] Inicializar Tauri v2 + React + TS + Vite
+- [x] Configurar Tailwind con la paleta definida
+- [x] Instalar: `react-router-dom`, `zustand`, `lucide-react`, `recharts`, `tauri-plugin-sql`
+- [x] Crear estructura de carpetas (`components`, `pages`, `hooks`, `stores`, `lib`, `types`, `styles`)
+- [x] Configurar SQLite con `tauri-plugin-sql` + migraciones iniciales (schema de la sección 3)
 
-### FASE 1 — Backend y datos
-- [ ] Implementar queries/capas de acceso para: transactions, categories, currencies, exchange_rates, recurring_rules
-- [ ] Comando `get_dashboard_summary(month, year)` → totales por tipo + conversión a CUP
-- [ ] Lógica de recurrentes: verificar `last_generated_month` al iniciar la app y generar si corresponde
-- [ ] Seed inicial: moneda CUP base, USD con tasa ejemplo, categorías comunes (Salud, Comida, Transporte, Salario, Otros)
+### FASE 1 — Backend y datos ✅
+- [x] Implementar queries/capas de acceso para: transactions, categories, currencies, exchange_rates, recurring_rules
+- [x] Comando `get_dashboard_summary(month, year)` → totales por tipo + conversión a CUP — implementado como capa TS (`src/lib/dashboard.ts`) vía plugin-sql, sin comando Rust
+- [x] Lógica de recurrentes: verificar `last_generated_month` al iniciar la app y generar si corresponde
+- [x] Seed inicial: moneda CUP base, USD con tasa ejemplo, categorías comunes (Salud, Comida, Transporte, Salario, Otros)
 
-### FASE 2 — UI base y navegación
-- [ ] Layout responsive: `Sidebar` (desktop) + `BottomNav` (mobile) con React Router
-- [ ] Página **Dashboard**: cards resumen + card de tasa activa con toggle + gráfico barras + últimas 10 transacciones
-- [ ] Página **Transacciones**: tabla con filtros (mes, tipo, categoría, método) + búsqueda + FAB "Nueva transacción"
-- [ ] Página **Categorías**: lista con icono/color + CRUD (validar transacciones asociadas o reasignar)
-- [ ] Página **Ajustes**: secciones Tasas de cambio + Recurrentes
+### FASE 2 — UI base y navegación ✅
+- [x] Layout responsive: `Sidebar` (desktop) + `BottomNav` (mobile) con React Router
+- [x] Página **Dashboard**: cards resumen + card de tasa activa con toggle + gráfico barras + últimas 10 transacciones
+- [x] Página **Transacciones**: tabla con filtros (mes, tipo, categoría, método) + búsqueda + FAB "Nueva transacción"
+- [x] Página **Categorías**: lista con icono/color + CRUD (validar transacciones asociadas o reasignar)
+- [x] Página **Ajustes**: secciones Tasas de cambio + Recurrentes
 
-### FASE 3 — Funcionalidad core
-- [ ] Formulario nueva transacción con los 7 campos definidos + cálculo en tiempo real del equivalente en CUP
-- [ ] Edición y eliminación de transacciones
-- [ ] Toggle global Efectivo/Transferencia en dashboard (recalcula solo visualización)
-- [ ] Generación automática de recurrentes al iniciar app + prompt opcional
+### FASE 3 — Funcionalidad core ✅
+- [x] Formulario nueva transacción con los 7 campos definidos + cálculo en tiempo real del equivalente en CUP
+- [x] Edición y eliminación de transacciones
+- [x] Toggle global Efectivo/Transferencia en dashboard (recalcula solo visualización)
+- [x] Generación automática de recurrentes al iniciar app + prompt opcional — se auto-generan al abrir la app (el prompt opcional no hizo falta)
 
-### FASE 4 — Vistas mensual/anual y pulido
-- [ ] Vista **Mensual**: selector mes, totales, desglose por categoría (pastel o barras horizontales), lista del mes
-- [ ] Vista **Anual**: selector año, gráfico de líneas por mes, totales, comparativa
-- [ ] Exportar transacciones a CSV
-- [ ] Modo oscuro completo
-- [ ] Empty states en todas las listas
-- [ ] Validaciones (montos > 0, campos requeridos, manejo de errores)
+### FASE 4 — Vistas mensual/anual y pulido ✅
+- [x] Vista **Mensual**: selector mes, totales, desglose por categoría (pastel o barras horizontales), lista del mes
+- [x] Vista **Anual**: selector año, gráfico de líneas por mes, totales, comparativa
+- [x] Exportar transacciones a CSV
+- [x] Modo oscuro completo
+- [x] Empty states en todas las listas
+- [x] Validaciones (montos > 0, campos requeridos, manejo de errores)
 
 ### FASE 5 — Android
-- [ ] `pnpm tauri android init` + verificar UI responsive en móvil
+> Estado: CI listo. En cada push a `main`, GitHub Actions (`.github/workflows/android.yml`)
+> ejecuta `tauri android init --ci` + `tauri android build --apk` y sube un **APK universal**
+> con las 4 ABIs (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`). Falta: primera ejecución real
+> y verificación en dispositivo.
+
+- [x] CI Android: workflow de GitHub Actions (push a `main`) que genera el APK universal multi-ABI
+- [ ] `pnpm tauri android init` + verificar UI responsive en móvil — el `init` ya lo corre el CI; falta verificar en dispositivo/emulador real
 - [ ] Ajustar interacciones táctiles (áreas ≥44px, bottom nav fija)
-- [ ] Generar APK debug y release
-- [ ] (Opcional) Configurar firma de APK
+- [ ] Generar APK debug y release — listo en CI: sale APK **debug** (firmado con clave de desarrollo); al configurar los secrets `ANDROID_KEY_*` pasa a **release** firmado. Pendiente de la primera ejecución.
+- [ ] (Opcional) Configurar firma de APK: crear `upload-keystore.jks` con `keytool`, subirlo en base64 como secret `ANDROID_KEY_BASE64` + `ANDROID_KEY_ALIAS` + `ANDROID_KEY_PASSWORD`
 
 ### FASE 6 — Extras post-MVP
 - [ ] Presupuestos por categoría con alertas
