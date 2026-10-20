@@ -117,6 +117,11 @@ jobs:
       - name: Generar proyecto Android (tauri android init)
         run: pnpm tauri android init --ci --skip-targets-install
 
+      - name: Aplicar el icono de la app (desktop + Android + iOS)
+        # gen/ no se versiona (se regenera aqui), asi que hay que volver a
+        # escribir los mipmaps del launcher Android a partir de assets/app-icon.svg
+        run: pnpm tauri icon assets/app-icon.svg --ios-color "#0F172A"
+
       - name: Decodificar keystore de release
         if: env.SIGNING_ENABLED == 'true'
         env:
