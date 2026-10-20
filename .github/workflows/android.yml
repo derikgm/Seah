@@ -1,0 +1,184 @@
+# Seah — Android CI
+#
+# En cada push a `main` genera UN solo APK universal con las 4 ABIs de Android
+# (arm64-v8a, armeabi-v7a, x86, x86_64): Tauri compila los 4 targets por
+# defecto y, como NO se pasa `--split-per-abi`, los empaqueta en un fat APK.
+#
+# Firmas: sin secrets se sube un APK debug (firmado con la clave de desarrollo,
+# instalable). Si se configuran estos secrets, se compila release y se firma:
+#   ANDROID_KEY_BASE64    keystore .jks -> base64 -i upload-keystore.jks
+#   ANDROID_KEY_ALIAS     alias dado a keytool
+#   ANDROID_KEY_PASSWORD  contraseña del alias/keystore
+
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: APK universal (todas las ABIs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CI: "true"
+      # true solo cuando existe el keystore de release entre los secrets
+      SIGNING_ENABLED: ${{ secrets.ANDROID_KEY_BASE64 != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Instalar dependencias JS
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Java 21 (Gradle 9.6 corre hasta Java 26)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Rust + targets Android
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache de Rust (src-tauri)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Setup Gradle (con cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Android SDK + NDK
+        run: |
+          set -eu
+          ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_HOME
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          test -d "$ANDROID_HOME" || { echo "Android SDK no encontrado en $ANDROID_HOME"; exit 1; }
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager || true)"
+          test -n "$SDKMANAGER" || { echo "sdkmanager no encontrado"; exit 1; }
+
+          # Licencias aceptadas para que el plugin de Gradle pueda auto-instalar componentes
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          LIST="$("$SDKMANAGER" --list 2>/dev/null || true)"
+
+          # compileSdk/targetSdk 37 es lo que fija la plantilla Android de Tauri
+          if [ ! -d "$ANDROID_HOME/platforms/android-37" ]; then
+            if printf '%s\n' "$LIST" | grep -q 'platforms;android-37'; then
+              "$SDKMANAGER" --install "platforms;android-37" > /dev/null
+            else
+              echo "platforms;android-37 no aparece en el sdkmanager; AGP intentara auto-instalarlo"
+            fi
+          fi
+
+          # Build-tools mas reciente (los necesita AGP para empaquetar el APK)
+          BT="$(printf '%s\n' "$LIST" | grep -oE 'build-tools;[0-9][^ |]+' | sort -uV | tail -1 || true)"
+          if [ -n "$BT" ] && [ ! -d "$ANDROID_HOME/build-tools/${BT#build-tools;}" ]; then
+            "$SDKMANAGER" --install "$BT" > /dev/null
+          fi
+
+          # NDK: lo usa cargo-mobile2 para compilar el lib de Rust (la plantilla de
+          # Tauri no fija ndkVersion, asi que sirve el mas reciente disponible)
+          if [ ! -d "$ANDROID_HOME/ndk" ] || [ -z "$(ls -A "$ANDROID_HOME/ndk" 2>/dev/null || true)" ]; then
+            NDK_PKG="$(printf '%s\n' "$LIST" | grep -oE 'ndk;[0-9][^ |]+' | sort -uV | tail -1 || true)"
+            test -n "$NDK_PKG" || { echo "No hay ningun paquete NDK disponible"; exit 1; }
+            "$SDKMANAGER" --install "$NDK_PKG" > /dev/null
+          fi
+
+          NDK_DIR="$ANDROID_HOME/ndk/$(ls -1 "$ANDROID_HOME/ndk" | sort -V | tail -1)"
+          echo "NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "NDK_HOME=$NDK_DIR"
+
+      - name: Generar proyecto Android (tauri android init)
+        run: pnpm tauri android init --ci --skip-targets-install
+
+      - name: Decodificar keystore de release
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+        run: base64 -d <<< "$ANDROID_KEY_BASE64" > "$RUNNER_TEMP/seah-upload-keystore.jks"
+
+      - name: Compilar APK universal (4 ABIs)
+        run: |
+          set -eu
+          if [ "$SIGNING_ENABLED" = "true" ]; then
+            echo "Secrets de firma presentes -> APK release"
+            pnpm tauri android build --apk --ci
+          else
+            echo "Sin ANDROID_KEY_BASE64 -> APK debug (firmado con la clave de desarrollo)"
+            pnpm tauri android build --apk --debug --ci
+          fi
+
+      - name: Recoger APK
+        run: |
+          set -eu
+          APK="$(find src-tauri -name '*.apk' | sort | head -1 || true)"
+          test -n "$APK" || { echo "No se genero ningun APK"; exit 1; }
+          VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [ "$SIGNING_ENABLED" = "true" ]; then VARIANT=release; else VARIANT=debug; fi
+          echo "VARIANT=$VARIANT" >> "$GITHUB_ENV"
+          mkdir -p dist-apk
+          cp "$APK" "dist-apk/Seah-$VERSION-$VARIANT-universal.apk"
+          echo "APK=$(ls dist-apk/*.apk)" >> "$GITHUB_ENV"
+          ls -lh dist-apk
+
+      - name: Firmar APK (release)
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -eu
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1 || true)"
+          test -n "$APKSIGNER" || { echo "apksigner no encontrado"; exit 1; }
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/seah-upload-keystore.jks" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass "pass:$ANDROID_KEY_PASSWORD" \
+            --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+            "$APK"
+          "$APKSIGNER" verify --print-certs "$APK"
+
+      - name: Subir APK como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seah-android-apk
+          path: dist-apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Resumen de la ejecucion
+        run: |
+          {
+            echo "## APK de Seah generado"
+            echo ""
+            echo "- Variante: **$VARIANT**"
+            echo "- APK universal con las 4 ABIs: \`arm64-v8a\`, \`armeabi-v7a\`, \`x86\`, \`x86_64\`"
+            echo "- Archivo: \`${APK##*/}\`"
+            echo "- Descarga: artifact **seah-android-apk** de esta ejecucion"
+          } >> "$GITHUB_STEP_SUMMARY"
